@@ -1,0 +1,161 @@
+{
+  "episode": "第1集：大佬摆摊，混混找茬",
+  "global": {
+    "aspect_ratio": "9:16",
+    "model": "kling-3.0-turbo",
+    "cfg_scale": 0.5,
+    "negative_prompt": "低画质, 模糊, 变形, 文字乱码, 多余手指, 畸变"
+  },
+  "character_urls": {
+    "陈无敌": "https://raw.githubusercontent.com/wenxiaoyu/short-drama/main/assets/characters/chen_wudi.png",
+    "王姐": "https://raw.githubusercontent.com/wenxiaoyu/short-drama/main/assets/characters/wang_xiulan.png",
+    "刀疤": "https://raw.githubusercontent.com/wenxiaoyu/short-drama/main/assets/characters/daoba.png",
+    "黑衣人": "https://raw.githubusercontent.com/wenxiaoyu/short-drama/main/assets/characters/chen_nianshan.png"
+  },
+  "scene_prefix": "https://raw.githubusercontent.com/wenxiaoyu/short-drama/main/assets/scenes",
+  "shots": [
+    {
+      "id": "ep001_shot01",
+      "type": "i2v",
+      "note": "场次一·夜市全景",
+      "duration": 5,
+      "first_frame": "sc_night_market_panorama.png",
+      "prompt": "Camera slowly pans across the bustling old Chinese night market street, neon signs flickering, barbecue smoke drifting, crowds walking, warm ambient lighting, cinematic, realistic"
+    },
+    {
+      "id": "ep001_shot02",
+      "type": "i2v",
+      "note": "场次一·刀疤带小弟穿行",
+      "duration": 5,
+      "element": "刀疤",
+      "first_frame": "sc_daoba_walk.png",
+      "prompt": "Camera tracks the thug as he walks arrogantly through the night market with two henchmen, iron pipe swinging, vendors stepping aside fearfully, moody lighting, realistic"
+    },
+    {
+      "id": "ep001_shot03",
+      "type": "i2v",
+      "note": "场次一·刀疤拍煎饼摊欺压王姐",
+      "duration": 6,
+      "element": ["刀疤", "王姐"],
+      "first_frame": "sc_daoba_wang_stall.png",
+      "prompt": "The thug slams his hand down on the pancake stall, leaning in aggressively toward the frightened woman vendor who stiffens, tense confrontation, dramatic lighting, realistic"
+    },
+    {
+      "id": "ep001_shot04",
+      "type": "i2v",
+      "note": "场次一·蛋液碎地王姐红眼眶",
+      "duration": 5,
+      "element": "王姐",
+      "first_frame": "sc_wang_tears.png",
+      "prompt": "The middle-aged woman's eyes redden and glisten as she fights back tears, cracked eggs and yellow yolk spilled on the ground at her feet, shallow depth of field, dramatic side light, realistic"
+    },
+    {
+      "id": "ep001_shot05",
+      "type": "i2v",
+      "note": "场次二·陈无敌翘二郎腿翻串",
+      "duration": 5,
+      "element": "陈无敌",
+      "first_frame": "sc_chen_wudi_grill.png",
+      "prompt": "The scruffy man lounges lazily on a folding chair, flipping meat skewers over glowing charcoal, smoke and sparks rising, a nonchalant shrug, warm light, realistic"
+    },
+    {
+      "id": "ep001_shot06",
+      "type": "i2v",
+      "note": "场次二·陈无敌站起伸懒腰",
+      "duration": 4,
+      "element": "陈无敌",
+      "first_frame": "sc_chen_wudi_grill.png",
+      "prompt": "The scruffy man slowly stands up and stretches lazily, greasy apron swaying, nonchalant expression, camera tilts up slightly, night market lights behind, realistic"
+    },
+    {
+      "id": "ep001_shot07",
+      "type": "i2v",
+      "note": "场次二·刀疤脸色铁青",
+      "duration": 4,
+      "element": "刀疤",
+      "first_frame": "sc_daoba_walk.png",
+      "prompt": "Camera pushes in to a close-up. The thug's face turns livid with anger, jaw clenching, eyes narrowing, tense stillness, night market bokeh background, dramatic lighting, realistic"
+    },
+    {
+      "id": "ep001_shot08",
+      "type": "i2v",
+      "note": "场次三·陈无敌舀辣椒面",
+      "duration": 5,
+      "element": "陈无敌",
+      "first_frame": "sc_chen_wudi_grill.png",
+      "prompt": "Camera pushes in to a close-up of his hands as he slowly scoops bright red chili powder from a jar and sprinkles it over a meat skewer, brushing oil, charcoal glow, shallow depth of field, realistic"
+    },
+    {
+      "id": "ep001_shot09",
+      "type": "i2v",
+      "note": "场次三·刀疤嚣张咬串",
+      "duration": 5,
+      "element": "刀疤",
+      "first_frame": "sc_daoba_walk.png",
+      "prompt": "Camera pushes in as the thug arrogantly bites into a spicy skewer with a confident smirk, chewing, two henchmen behind him, barbecue stall, night market, realistic"
+    },
+    {
+      "id": "ep001_shot10",
+      "type": "i2v",
+      "note": "场次三·刀疤表情凝固",
+      "duration": 4,
+      "element": "刀疤",
+      "first_frame": "sc_daoba_walk.png",
+      "prompt": "Camera pushes in to an extreme close-up. The thug's expression suddenly freezes mid-bite, eyes widening, sweat beading on his forehead, a dramatic pause, realistic"
+    },
+    {
+      "id": "ep001_shot11",
+      "type": "i2v",
+      "note": "场次四·刀疤辣哭跳脚",
+      "duration": 5,
+      "element": "刀疤",
+      "first_frame": "sc_daoba_cry.png",
+      "prompt": "The thug's face turns red and purple, tears and snot streaming as he jumps around frantically gasping for water, two henchmen panicking, comedic over-the-top reaction, realistic"
+    },
+    {
+      "id": "ep001_shot12",
+      "type": "i2v",
+      "note": "场次四·摊贩哄笑",
+      "duration": 4,
+      "element": "刀疤",
+      "first_frame": "sc_vendors_laugh.png",
+      "prompt": "A crowd of street vendors burst out laughing and pointing at the thug squatting on the ground, night market scene, warm festive lighting, comedic atmosphere, realistic"
+    },
+    {
+      "id": "ep001_shot13",
+      "type": "i2v",
+      "note": "场次四·陈无敌眼底锐利一闪",
+      "duration": 4,
+      "element": "陈无敌",
+      "first_frame": "sc_chen_wudi_grill.png",
+      "prompt": "Camera pushes in to a close-up of his face as he lowers his head to fan the charcoal, firelight flickering, a brief flash of sharp piercing intensity crosses his eyes then fades, cinematic, realistic"
+    },
+    {
+      "id": "ep001_shot14",
+      "type": "i2v",
+      "note": "场次五·街角黑衣人",
+      "duration": 5,
+      "element": "黑衣人",
+      "first_frame": "sc_heiyiren_corner.png",
+      "prompt": "A hooded figure in black stands motionless at the corner of the night market street, hood pulled low, distant and still, moody blue-toned lighting, cinematic, realistic"
+    },
+    {
+      "id": "ep001_shot15",
+      "type": "i2v",
+      "note": "场次五·老照片特写",
+      "duration": 5,
+      "element": "黑衣人",
+      "first_frame": "sc_heiyiren_corner.png",
+      "prompt": "Camera pushes in to a close-up of his hand holding a faded old photograph of young men, a thumb slowly rubbing over one man's face, shallow depth of field, night street bokeh, cinematic, realistic"
+    },
+    {
+      "id": "ep001_shot16",
+      "type": "i2v",
+      "note": "场次五·黑衣人抬头眼神",
+      "duration": 5,
+      "element": "黑衣人",
+      "first_frame": "sc_heiyiren_corner.png",
+      "prompt": "Camera pushes in to a close-up of his face as the hooded figure slowly raises his head, revealing a pair of piercing cold eyes glowing in the darkness, low-key dramatic lighting, cinematic, realistic"
+    }
+  ]
+}

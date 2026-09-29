@@ -8,6 +8,16 @@ reviews/
 compliance-report.md
 export/
 
+# 本地工作目录（豆包原图、去水印中间产物）
+work/
+
+# 生成的视频（大文件，不提交）
+output/
+
+# Python
+__pycache__/
+*.pyc
+
 # 系统文件
 .DS_Store
 Thumbs.db
