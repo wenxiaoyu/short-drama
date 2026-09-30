@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
 """
-Kling AI 3.0 文生视频/图生视频命令行工具（已按实测 API 校准）
+Kling AI 3.0 完整版 视频生成工具（竖屏 + 原生对白 + 主体库绑定）
 
-端点 (base 默认 https://api-beijing.klingai.com):
-  提交: POST {base}/text-to-video/{model}     (文生视频)
-        POST {base}/image-to-video/{model}    (图生视频)
-  查询: GET  {base}/tasks?task_ids={id}
-
-认证: Authorization: Bearer <api_key>  (从 https://klingai.com/dev/api-key 创建)
-
-依赖: requests
+关键能力（实测校准）:
+  主体库: POST /v1/general/advanced-custom-elements        创建主体(异步)
+          GET  /v1/general/advanced-custom-elements/{id}   查询主体(拿 element_id)
+  图生视频: POST /image-to-video/kling-3.0
+     contents: [{type:prompt,text},{type:first_frame,url},{type:element,element_id,id}]
+     settings: {multi_shot, audio:"native"|"off", resolution, duration}
+  认证: Authorization: Bearer <api_key>
 
 用法:
   python3 scripts/kling_gen.py auth
-  python3 scripts/kling_gen.py t2v "prompt" [选项]
-  python3 scripts/kling_gen.py i2v -i 图片URL/路径 "prompt" [选项]
-  python3 scripts/kling_gen.py query <task_id> [--download]
+  python3 scripts/kling_gen.py element create --name 陈无敌 --desc "..." --frontal <url> [--refer <url> ...]
+  python3 scripts/kling_gen.py element query <task_id>
+  python3 scripts/kling_gen.py element list
+  python3 scripts/kling_gen.py i2v -i <首帧图url> --element-ref chen:322705206027217 "prompt"
   python3 scripts/kling_gen.py shots shots/ep001.json [--dry-run]
-  （shots 模式按镜头 id 输出到 output/ep{集数}/shot{镜头号}.mp4）
+  python3 scripts/kling_gen.py query <task_id> [--download]
 """
 
 import argparse
-import base64
 import json
 import os
 import re
@@ -33,8 +32,7 @@ import requests
 DEFAULT_BASE = "https://api-beijing.klingai.com"
 CONFIG_PATH = os.path.expanduser("~/.kling_config.json")
 
-DEFAULT_MODEL = "kling-3.0-turbo"
-RATIOS = ("16:9", "9:16", "1:1")
+DEFAULT_MODEL = "kling-3.0"
 
 
 # ---------- 配置 ----------
@@ -55,7 +53,7 @@ def save_config(cfg):
 def require_config():
     cfg = load_config()
     if not cfg or not cfg.get("api_key"):
-        sys.exit("未配置 API Key，请先运行: python3 kling_gen.py auth")
+        sys.exit("未配置 API Key，请先运行: python3 scripts/kling_gen.py auth")
     return cfg
 
 
@@ -81,51 +79,68 @@ def api_get(base, path, api_key):
     return data
 
 
-def submit_t2i(cfg, prompt, ratio, negative):
-    body = {"prompt": prompt}
-    if ratio:
-        body["aspect_ratio"] = ratio
-    if negative:
-        body["negative_prompt"] = negative
-    data = api_post(cfg["base"], "/v1/images/omni-image", cfg["api_key"], body)
-    return data
+# ---------- 主体库 ----------
 
-
-def submit_t2v(cfg, prompt, model, negative, ratio, duration, cfg_scale, audio):
+def create_element(cfg, name, desc, frontal, refer_images):
     body = {
-        "prompt": prompt,
-        "negative_prompt": negative,
-        "cfg_scale": cfg_scale,
-        "aspect_ratio": ratio,
-        "duration": int(duration),
+        "element_name": name,
+        "element_description": desc,
+        "reference_type": "image_refer",
+        "element_image_list": {
+            "frontal_image": frontal,
+            "refer_images": [{"image_url": u} for u in refer_images],
+        },
+        "tag_list": [{"tag_id": "o_102"}],
     }
-    if audio:
-        body["generate_audio"] = True
-    data = api_post(cfg["base"], f"/text-to-video/{model}", cfg["api_key"], body)
-    return data["data"]["id"]
+    data = api_post(cfg["base"], "/v1/general/advanced-custom-elements", cfg["api_key"], body)
+    return data["data"]["task_id"]
 
 
-def submit_i2v(cfg, prompt, contents, model, negative, duration, cfg_scale, audio):
+def query_element(cfg, task_id):
+    return api_get(cfg["base"], f"/v1/general/advanced-custom-elements/{task_id}", cfg["api_key"])["data"]
+
+
+def wait_element(cfg, task_id, interval=8, timeout=900):
+    start = time.time()
+    while True:
+        d = query_element(cfg, task_id)
+        status = d.get("task_status")
+        if status == "succeed":
+            elems = d.get("task_result", {}).get("elements", [])
+            return elems[0]["element_id"] if elems else None
+        if status == "failed":
+            raise RuntimeError(f"主体创建失败: {d.get('task_status_msg')}")
+        if time.time() - start > timeout:
+            raise TimeoutError(f"主体 {task_id} 超时")
+        print(f"  主体状态 {status}，{interval}s 后重试…")
+        time.sleep(interval)
+
+
+def list_elements(cfg, page_num=1, page_size=30):
+    data = api_get(cfg["base"], f"/v1/general/advanced-custom-elements?pageNum={page_num}&pageSize={page_size}", cfg["api_key"])
+    return data.get("data", [])
+
+
+# ---------- 视频生成（完整版） ----------
+
+def submit_i2v_v3(cfg, prompt, first_frame, elements, duration, resolution, audio):
+    contents = [{"type": "prompt", "text": prompt}]
+    if first_frame:
+        contents.append({"type": "first_frame", "url": first_frame})
+    for ref, element_id in elements:
+        contents.append({"type": "element", "element_id": str(element_id), "id": ref})
     body = {
         "contents": contents,
-        "prompt": prompt,
-        "negative_prompt": negative,
-        "cfg_scale": cfg_scale,
-        "duration": int(duration),
+        "settings": {
+            "multi_shot": True,
+            "audio": audio,
+            "resolution": resolution,
+            "duration": int(duration),
+        },
+        "options": {"watermark_info": {"enabled": False}},
     }
-    if audio:
-        body["generate_audio"] = True
-    data = api_post(cfg["base"], f"/image-to-video/{model}", cfg["api_key"], body)
+    data = api_post(cfg["base"], f"/image-to-video/{DEFAULT_MODEL}", cfg["api_key"], body)
     return data["data"]["id"]
-
-
-def build_contents(first_frame, elements=None, last_frame=None):
-    items = [{"type": "first_frame", "url": first_frame}]
-    for e in elements or []:
-        items.append({"type": "element", "url": e})
-    if last_frame:
-        items.append({"type": "last_frame", "url": last_frame})
-    return items
 
 
 def query_task(cfg, task_id):
@@ -147,7 +162,7 @@ def wait_task(cfg, task_id, interval=5, timeout=1800):
             raise RuntimeError(f"任务失败: {json.dumps(task, ensure_ascii=False)}")
         print(f"  状态 {status}，{interval}s 后重试…")
         if time.time() - start > timeout:
-            raise TimeoutError(f"任务 {task_id} 超时未完成")
+            raise TimeoutError(f"任务 {task_id} 超时")
         time.sleep(interval)
 
 
@@ -181,26 +196,44 @@ def cmd_auth(args):
     print(f"已保存到 {CONFIG_PATH}")
 
 
-def cmd_t2i(args):
+def cmd_element_create(args):
     cfg = require_config()
-    data = submit_t2i(cfg, args.prompt, args.ratio, args.negative)
-    print(json.dumps(data, ensure_ascii=False, indent=2))
-
-
-def cmd_t2v(args):
-    cfg = require_config()
-    tid = submit_t2v(cfg, args.prompt, args.model, args.negative,
-                     args.ratio, args.duration, args.cfg_scale, args.audio)
-    print(f"已提交文生视频任务: {tid}")
+    refer = args.refer if args.refer else [args.frontal]
+    tid = create_element(cfg, args.name, args.desc, args.frontal, refer)
+    print(f"已提交主体创建任务: {tid}")
     if args.wait:
-        print_result(wait_task(cfg, tid), tid, args.download)
+        eid = wait_element(cfg, tid)
+        print(f"element_id: {eid}")
+
+
+def cmd_element_query(args):
+    cfg = require_config()
+    d = query_element(cfg, args.task_id)
+    status = d.get("task_status")
+    print(f"主体状态: {status}")
+    if status == "succeed":
+        for e in d.get("task_result", {}).get("elements", []):
+            print(f"  element_id={e['element_id']}  name={e.get('element_name')}")
+
+
+def cmd_element_list(args):
+    cfg = require_config()
+    items = list_elements(cfg)
+    for item in items:
+        status = item.get("task_status")
+        elems = item.get("task_result", {}).get("elements", [])
+        for e in elems:
+            print(f"  element_id={e.get('element_id')}  name={e.get('element_name')}  status={e.get('status')}")
 
 
 def cmd_i2v(args):
     cfg = require_config()
-    contents = build_contents(args.image, args.element, args.last_frame)
-    tid = submit_i2v(cfg, args.prompt, contents, args.model, args.negative,
-                     args.duration, args.cfg_scale, args.audio)
+    elements = []
+    for kv in args.element_ref or []:
+        ref, eid = kv.split(":", 1)
+        elements.append((ref, eid))
+    prompt = f"镜头1, {args.duration}, {args.prompt}"
+    tid = submit_i2v_v3(cfg, prompt, args.image, elements, args.duration, args.resolution, args.audio)
     print(f"已提交图生视频任务: {tid}")
     if args.wait:
         print_result(wait_task(cfg, tid), tid, args.download)
@@ -236,21 +269,6 @@ def print_result(task, task_id, do_download, out_path=None):
         print(json.dumps(task, ensure_ascii=False, indent=2))
 
 
-def build_shot_contents(shot, char_urls, scene_prefix):
-    items = []
-    ff = shot.get("first_frame")
-    if ff:
-        ff_url = ff if ff.startswith(("http://", "https://")) else f"{scene_prefix}/{ff}"
-        items.append({"type": "first_frame", "url": ff_url})
-    elements = shot.get("element", [])
-    if isinstance(elements, str):
-        elements = [elements]
-    for e in elements:
-        e_url = char_urls.get(e, e) if char_urls else e
-        items.append({"type": "element", "url": e_url})
-    return items
-
-
 def shot_out_path(shot_id):
     m = re.match(r"ep(\d+)_shot(\d+)", shot_id or "")
     if not m:
@@ -263,36 +281,32 @@ def cmd_shots(args):
     with open(args.shots, encoding="utf-8") as f:
         plan = json.load(f)
     shots = plan.get("shots", [])
-    char_urls = plan.get("character_urls", {})
+    elements_map = plan.get("elements", {})
     scene_prefix = plan.get("scene_prefix", "").rstrip("/")
+    global_cfg = plan.get("global", {})
+    resolution = global_cfg.get("resolution", args.resolution)
+    audio = global_cfg.get("audio", args.audio)
     if args.limit:
         shots = shots[: args.limit]
     if args.dry_run:
         print(f"dry-run：共 {len(shots)} 个镜头（不提交）")
     for idx, s in enumerate(shots):
-        stype = s.get("type", "t2v")
-        prompt = s.get("prompt", "")
         duration = s.get("duration", args.duration)
         out_path = shot_out_path(s.get("id", ""))
-        print(f"[{idx + 1}/{len(shots)}] {s.get('id', '')} ({stype}, {duration}s) -> {out_path}")
+        print(f"[{idx + 1}/{len(shots)}] {s.get('id', '')} ({duration}s) -> {out_path}")
         if args.dry_run:
-            print(f"    prompt: {prompt}")
-            if stype == "i2v":
-                print(f"    element={s.get('element')}  first_frame={s.get('first_frame')}")
+            print(f"    element={s.get('element')}  first_frame={s.get('first_frame')}")
+            print(f"    prompt: {s.get('prompt')}")
             continue
         try:
-            model = s.get("model", args.model)
-            negative = s.get("negative_prompt", plan.get("global", {}).get("negative_prompt", ""))
-            cfg_scale = s.get("cfg_scale", plan.get("global", {}).get("cfg_scale", args.cfg_scale))
-            audio = s.get("generate_audio", args.audio)
-            if stype == "i2v":
-                contents = s.get("contents") or build_shot_contents(s, char_urls, scene_prefix)
-                tid = submit_i2v(cfg, prompt, contents, model, negative,
-                                 duration, cfg_scale, audio)
-            else:
-                ratio = s.get("aspect_ratio", plan.get("global", {}).get("aspect_ratio", args.ratio))
-                tid = submit_t2v(cfg, prompt, model, negative,
-                                 ratio, duration, cfg_scale, audio)
+            refs = s.get("element", [])
+            if isinstance(refs, str):
+                refs = [refs]
+            elements = [(r, elements_map[r]) for r in refs]
+            ff = s.get("first_frame")
+            ff_url = ff if ff.startswith(("http://", "https://")) else f"{scene_prefix}/{ff}"
+            prompt = f"镜头1, {duration}, {s.get('prompt')}"
+            tid = submit_i2v_v3(cfg, prompt, ff_url, elements, duration, resolution, audio)
             print(f"    提交任务: {tid}")
             if args.wait:
                 print_result(wait_task(cfg, tid), tid, args.download, out_path)
@@ -303,57 +317,49 @@ def cmd_shots(args):
 
 
 def build_parser():
-    p = argparse.ArgumentParser(description="Kling AI 3.0 视频生成工具")
+    p = argparse.ArgumentParser(description="Kling AI 3.0 完整版视频生成工具")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("auth", help="配置 API Key").set_defaults(func=cmd_auth)
 
-    ptg = sub.add_parser("t2i", help="文生图（生成角色定妆图）")
-    ptg.add_argument("prompt")
-    ptg.add_argument("--ratio", default="9:16", choices=RATIOS)
-    ptg.add_argument("--negative", default="")
-    ptg.set_defaults(func=cmd_t2i)
+    pe = sub.add_parser("element", help="主体库管理")
+    pes = pe.add_subparsers(dest="sub", required=True)
+    pec = pes.add_parser("create", help="创建主体")
+    pec.add_argument("--name", required=True, help="主体名称(≤20字符)")
+    pec.add_argument("--desc", required=True, help="主体描述(≤100字符)")
+    pec.add_argument("--frontal", required=True, help="正面参考图 URL")
+    pec.add_argument("--refer", action="append", help="其他角度参考图 URL（可多次）")
+    pec.add_argument("--wait", action="store_true", help="等待完成并返回 element_id")
+    pec.set_defaults(func=cmd_element_create)
+    peq = pes.add_parser("query", help="查询主体")
+    peq.add_argument("task_id")
+    peq.set_defaults(func=cmd_element_query)
+    pel = pes.add_parser("list", help="列出主体")
+    pel.set_defaults(func=cmd_element_list)
 
-    pt = sub.add_parser("t2v", help="文生视频")
-    pt.add_argument("prompt")
-    pt.add_argument("--model", default=DEFAULT_MODEL)
-    pt.add_argument("--negative", default="低画质, 模糊, 变形, 文字乱码, 多余手指")
-    pt.add_argument("--ratio", default="9:16", choices=RATIOS)
-    pt.add_argument("--duration", default="5", help="秒数，Kling 3.0 支持 3-15")
-    pt.add_argument("--cfg-scale", type=float, default=0.5)
-    pt.add_argument("--audio", action="store_true", help="生成原生音频/对白")
-    pt.add_argument("--wait", action="store_true")
-    pt.add_argument("--download", action="store_true")
-    pt.set_defaults(func=cmd_t2v)
-
-    pi = sub.add_parser("i2v", help="图生视频")
-    pi.add_argument("prompt")
+    pi = sub.add_parser("i2v", help="图生视频（完整版，audio:native）")
+    pi.add_argument("prompt", help="动作/对白描述（用 @ref 引用主体）")
     pi.add_argument("-i", "--image", required=True, help="首帧图 URL")
-    pi.add_argument("--element", action="append", default=[], help="角色参考图 URL（可多次指定，用于一致性）")
-    pi.add_argument("--last-frame", default=None, help="尾帧图 URL")
-    pi.add_argument("--model", default=DEFAULT_MODEL)
-    pi.add_argument("--negative", default="低画质, 模糊, 变形, 文字乱码, 多余手指")
+    pi.add_argument("--element-ref", action="append", help="主体绑定，格式 ref:element_id，可多次")
     pi.add_argument("--duration", default="5")
-    pi.add_argument("--cfg-scale", type=float, default=0.5)
-    pi.add_argument("--audio", action="store_true")
+    pi.add_argument("--resolution", default="720p", choices=("720p", "1080p", "4k"))
+    pi.add_argument("--audio", default="native", choices=("native", "off"))
     pi.add_argument("--wait", action="store_true")
     pi.add_argument("--download", action="store_true")
     pi.set_defaults(func=cmd_i2v)
 
-    pq = sub.add_parser("query", help="查询任务")
+    pq = sub.add_parser("query", help="查询视频任务")
     pq.add_argument("task_id")
     pq.add_argument("--download", action="store_true")
     pq.set_defaults(func=cmd_query)
 
     ps = sub.add_parser("shots", help="批量生成镜头")
-    ps.add_argument("shots", help="镜头清单 JSON 文件")
+    ps.add_argument("shots", help="镜头清单 JSON")
     ps.add_argument("--dry-run", action="store_true")
     ps.add_argument("--limit", type=int)
-    ps.add_argument("--model", default=DEFAULT_MODEL)
-    ps.add_argument("--ratio", default="9:16", choices=RATIOS)
     ps.add_argument("--duration", default="5")
-    ps.add_argument("--cfg-scale", type=float, default=0.5)
-    ps.add_argument("--audio", action="store_true")
+    ps.add_argument("--resolution", default="720p", choices=("720p", "1080p", "4k"))
+    ps.add_argument("--audio", default="native", choices=("native", "off"))
     ps.add_argument("--wait", action="store_true")
     ps.add_argument("--download", action="store_true")
     ps.set_defaults(func=cmd_shots)
